@@ -1,8 +1,8 @@
 # Encoding Station
 
 A client-side, multi-transform encoder/decoder with an Ubuntu terminal
-aesthetic. No build step, no external libraries, no server — every byte is
-processed locally in your browser.
+aesthetic. No transform libraries, no server — every byte is processed locally
+in your browser.
 
 ## Features
 
@@ -28,30 +28,44 @@ processed locally in your browser.
 
 ## Stack
 
-- React 18 + ReactDOM (UMD, via CDN)
-- `@babel/standalone` compiles the single `app.jsx` in the browser
+- [Vite](https://vitejs.dev/) + `@vitejs/plugin-react`
+- React 18 + ReactDOM, imported as ES modules
 - JetBrains Mono via Google Fonts
+
+The only runtime dependencies are `react` and `react-dom`; all encoding logic
+is hand-written, dependency-free JavaScript.
+
+## Project structure
+
+```
+src/
+├── main.jsx          # ReactDOM.createRoot entry point
+├── App.jsx           # App component + top-level state
+├── index.css         # all styles
+├── constants.js      # TRANSFORMS registry, TRANSFORM_MAP, XOR_KEY_MAX
+├── transforms/       # one file per codec, each a pair of named exports
+├── utils/            # byte helpers + runTransform / reinsert
+└── components/       # Header, Controls, PillBar, views, cards, …
+```
+
+`constants.js` is the single source of truth: it imports every transform and
+assembles the `TRANSFORMS` array and `TRANSFORM_MAP`.
 
 ## Local preview
 
-It's static — open `index.html` through any static server:
-
 ```bash
-python3 -m http.server 8000
-# then visit http://localhost:8000
+npm install
+npm run dev
 ```
 
-(Opening the file directly via `file://` also mostly works, but a server is
-recommended so the browser fetches `app.jsx` without cross-origin file
-restrictions.)
+Then open the printed local URL (default http://localhost:5173).
 
-## Deploy to Vercel
-
-This is a zero-config static deployment. From the project root:
+## Build & deploy to Vercel
 
 ```bash
-vercel
+npm run build     # outputs static assets to dist/
+npm run preview   # preview the production build locally
 ```
 
-Vercel serves `index.html` directly; `vercel.json` only adds a few hardening
-response headers.
+Vercel auto-detects Vite: it runs `npm run build` and serves `dist/`.
+`vercel.json` adds a few hardening response headers.
