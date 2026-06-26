@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Encoding Station — a client-side multi-transform encoder/decoder with an Ubuntu terminal aesthetic." />
+    <title>Encoding Station</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- React + Babel (no build step) -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script>
+      // Force the classic JSX runtime (React.createElement) so the in-browser
+      // transform produces no ESM `import` statements — required for a
+      // build-step-free <script type="text/babel"> setup.
+      Babel.registerPreset("react-classic", {
+        presets: [[Babel.availablePresets["react"], { runtime: "classic" }]],
+      });
+    </script>
+
+    <style>
+      :root {
+        --bg: #300a24;
+        --accent: #e95420;
+        --text: #ffffff;
+        --muted: #aaaaaa;
+        --panel: #3d1330;
+        --panel-2: #2a0820;
+        --border: #5a2548;
+        --error: #ff6b6b;
+        --ok: #58d68d;
+        --font: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--font);
+        font-size: 15px;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+
+      /* Optional scanline overlay */
+      .scanlines::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 9999;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0) 0px,
+          rgba(0, 0, 0, 0) 2px,
+          rgba(0, 0, 0, 0.08) 3px,
+          rgba(0, 0, 0, 0.08) 3px
+        );
+        mix-blend-mode: multiply;
+      }
+
+      #root {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 24px 18px 64px;
+      }
+
+      a {
+        color: var(--accent);
+      }
+
+      ::selection {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      /* Header */
+      .header {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 10px;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 14px;
+        margin-bottom: 18px;
+      }
+      .prompt {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .title {
+        font-weight: 700;
+        font-size: 20px;
+        letter-spacing: 0.5px;
+      }
+      .subtitle {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .cursor {
+        display: inline-block;
+        width: 9px;
+        height: 18px;
+        margin-left: 2px;
+        background: var(--accent);
+        transform: translateY(2px);
+        animation: blink 1.05s steps(1) infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+
+      /* Controls row */
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .control-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--muted);
+      }
+      .toggle {
+        display: inline-flex;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .toggle button {
+        background: transparent;
+        color: var(--muted);
+        border: 0;
+        padding: 7px 14px;
+        font-family: var(--font);
+        font-size: 13px;
+        cursor: pointer;
+        transition: background 0.15s, color 0.15s;
+      }
+      .toggle button.active {
+        background: var(--accent);
+        color: #fff;
+        font-weight: 700;
+      }
+      .toggle button:not(.active):hover {
+        color: var(--text);
+        background: rgba(233, 84, 32, 0.12);
+      }
+
+      /* Input */
+      textarea.input {
+        width: 100%;
+        min-height: 120px;
+        resize: vertical;
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+        font-family: var(--font);
+        font-size: 14px;
+        line-height: 1.5;
+        outline: none;
+      }
+      textarea.input:focus {
+        border-color: var(--accent);
+      }
+
+      .field {
+        background: var(--panel-2);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-family: var(--font);
+        font-size: 13px;
+        outline: none;
+      }
+      .field:focus {
+        border-color: var(--accent);
+      }
+
+      .xor-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 12px 0 4px;
+        flex-wrap: wrap;
+      }
+      .xor-row label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .hint {
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .field-error {
+        color: var(--error);
+        font-size: 12px;
+      }
+
+      /* Pills */
+      .pills {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 14px 0 8px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        color: var(--muted);
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 12.5px;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.15s;
+      }
+      .pill:hover {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+      .pill.on {
+        background: rgba(233, 84, 32, 0.18);
+        border-color: var(--accent);
+        color: var(--text);
+      }
+      .pill .box {
+        width: 13px;
+        height: 13px;
+        border-radius: 3px;
+        border: 1px solid var(--accent);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        line-height: 1;
+        color: #fff;
+      }
+      .pill.on .box {
+        background: var(--accent);
+      }
+
+      .section-title {
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 1.4px;
+        color: var(--muted);
+        margin: 22px 0 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .section-title::before {
+        content: "$";
+        color: var(--accent);
+      }
+
+      /* Cards */
+      .cards {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 14px;
+      }
+      .card.final {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent) inset;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .card-name {
+        font-weight: 700;
+        font-size: 13.5px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .step-index {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .badge {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--bg);
+        background: var(--accent);
+        border-radius: 4px;
+        padding: 2px 6px;
+        font-weight: 700;
+      }
+      .out {
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 13px;
+        white-space: pre-wrap;
+        word-break: break-all;
+        max-height: 220px;
+        overflow: auto;
+        color: var(--text);
+      }
+      .out.empty {
+        color: var(--muted);
+        font-style: italic;
+      }
+      .out.error {
+        color: var(--error);
+        border-color: var(--error);
+      }
+      .btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        border-radius: 5px;
+        padding: 5px 10px;
+        font-family: var(--font);
+        font-size: 12px;
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      .btn:hover {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+      .btn.copied {
+        border-color: var(--ok);
+        color: var(--ok);
+      }
+      .btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+
+      /* Pipeline drag */
+      .card.draggable {
+        cursor: grab;
+      }
+      .card.dragging {
+        opacity: 0.5;
+      }
+      .card.drag-over {
+        border-color: var(--accent);
+      }
+      .grip {
+        color: var(--muted);
+        cursor: grab;
+        font-size: 14px;
+        letter-spacing: -2px;
+      }
+      .step-controls {
+        display: flex;
+        gap: 4px;
+      }
+      .icon-btn {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--muted);
+        border-radius: 4px;
+        width: 26px;
+        height: 26px;
+        cursor: pointer;
+        font-family: var(--font);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .icon-btn:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--text);
+      }
+      .icon-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+      }
+
+      /* Empty state */
+      .empty-state {
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        padding: 28px 16px;
+        text-align: center;
+        color: var(--muted);
+      }
+      .empty-state .blink {
+        color: var(--accent);
+      }
+
+      .footer {
+        margin-top: 36px;
+        border-top: 1px solid var(--border);
+        padding-top: 14px;
+        color: var(--muted);
+        font-size: 12px;
+        display: flex;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      @media (max-width: 560px) {
+        #root {
+          padding: 16px 12px 48px;
+        }
+        .title {
+          font-size: 17px;
+        }
+        .controls {
+          gap: 12px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" src="app.jsx" data-presets="react-classic"></script>
+    <noscript>
+      <p style="color: #fff; font-family: monospace; padding: 24px">
+        Encoding Station requires JavaScript to run. All processing happens locally in your browser.
+      </p>
+    </noscript>
+  </body>
+</html>
